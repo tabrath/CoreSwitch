@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -66,18 +67,35 @@ namespace CoreSwitch
         public static (string, bool) GetSelectedVersion()
         {
             var (file, ok) = FindGlobalJson();
-            if (!ok)
-                return (null, false);
+            if (ok)
+            {
+                try
+                {
+                    var content = File.ReadAllText(file.FullName);
+                    var config = JsonConvert.DeserializeObject<GlobalJson>(content);
 
-            var content = File.ReadAllText(file.FullName);
-            if (string.IsNullOrEmpty(content))
-                return (null, false);
+                    return (config.Sdk.Version, true);
+                }
+                catch { }
+            }
 
+            return GetSelectedVersionFallback();
+        }
+
+        private static (string, bool) GetSelectedVersionFallback()
+        {
             try
             {
-                var config = JsonConvert.DeserializeObject<GlobalJson>(content);
+                using (var dotnet = Process.Start(new ProcessStartInfo("dotnet", "--version")
+                {
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                }))
+                {
+                    var version = dotnet.StandardOutput.ReadToEnd();
 
-                return (config.Sdk.Version, true);
+                    return (version, true);
+                }
             }
             catch
             {
