@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Newtonsoft.Json;
 
 namespace CoreSwitch.CLI
 {
@@ -12,6 +11,16 @@ namespace CoreSwitch.CLI
         private const ConsoleColor SuccessColor = ConsoleColor.Green;
         private const ConsoleColor SelectionColor = ConsoleColor.White;
         private const ConsoleColor LoggerColor = ConsoleColor.DarkGray;
+        private const string VersionRegex = @"^[0-9]\.[0-9]\.[0-9](\-[\S]+)?$";
+
+        // @todo: --daemon to enable tray icon?
+        // @todo: refactor/cleanup
+        // @todo: 3rd party argument parser
+        // @todo: global/local flags, what is default?
+        // @todo: 3rd party logger, or improve (levels, disposable)
+        // @todo: interactive version select (up/down/enter)?
+        // @todo: warnings/prompts when downgrading?
+        // @todo: extra check of environment variables
 
         static void Main(string[] args)
         {
@@ -58,7 +67,7 @@ namespace CoreSwitch.CLI
                         return;
                     }
 
-                    var match = Regex.Match(rawArgs[0], @"^[0-9]\.[0-9]\.[0-9](\-[\S]+)?$");
+                    var match = Regex.Match(rawArgs[0], VersionRegex);
                     var argVersion = match.Success
                         ? match.Value
                         : rawArgs[0].ToLower() == "latest"
