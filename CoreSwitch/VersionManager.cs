@@ -32,12 +32,12 @@ namespace CoreSwitch
             else if (platform == OSPlatform.Linux)
             {
                 _home = Environment.GetEnvironmentVariable("HOME");
-                _dotnet = Path.Combine("opt", "dotnet", "sdk");
+                _dotnet = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "sdk");
             }
             else if (platform == OSPlatform.OSX)
             {
                 _home = Environment.GetEnvironmentVariable("HOME");
-                _dotnet = Path.Combine("opt", "dotnet", "sdk"); // @todo: ensure this is correct
+                _dotnet = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "sdk"); // @todo: ensure this is correct
             }
 
             _success = true;
@@ -90,20 +90,27 @@ namespace CoreSwitch
             if (!_success)
                 return (null, false);
 
-            var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-            while (!directory.GetFiles(GlobalJsonFilename).Any())
+            try
             {
-                directory = directory.Parent;
-                if (directory == null)
+                var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+                while (!directory.GetFiles(GlobalJsonFilename).Any())
                 {
-                    directory = new DirectoryInfo(_home);
-                    break;
+                    directory = directory.Parent;
+                    if (directory == null)
+                    {
+                        directory = new DirectoryInfo(_home);
+                        break;
+                    }
                 }
+
+                var file = directory?.GetFiles(GlobalJsonFilename).FirstOrDefault();
+
+                return (file, file != null);
             }
-
-            var file = directory?.GetFiles(GlobalJsonFilename).FirstOrDefault();
-
-            return (file, file != null);
+            catch
+            {
+                return (null, false);
+            }
         }
 
         private class GlobalJson
