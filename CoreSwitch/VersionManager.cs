@@ -11,6 +11,7 @@ namespace CoreSwitch
     public static class VersionManager
     {
         private static readonly string _home;
+        private static readonly string _sdk;
         private static readonly string _dotnet;
         private static readonly bool _success;
 
@@ -28,28 +29,31 @@ namespace CoreSwitch
             if (platform == OSPlatform.Windows)
             {
                 _home = Environment.GetEnvironmentVariable("USERPROFILE");
-                _dotnet = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles"), "dotnet", "sdk");
+                _sdk = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles"), "dotnet", "sdk");
+                _dotnet = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles"), "dotnet", "dotnet.exe");
             }
             else if (platform == OSPlatform.Linux)
             {
                 _home = Environment.GetEnvironmentVariable("HOME");
-                _dotnet = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "sdk");
+                _sdk = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "sdk");
+                _dotnet = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "dotnet");
             }
             else if (platform == OSPlatform.OSX)
             {
                 _home = Environment.GetEnvironmentVariable("HOME");
-                _dotnet = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "sdk"); // @todo: ensure this is correct
+                _sdk = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "sdk"); // @todo: ensure this is correct
+                _dotnet = Path.DirectorySeparatorChar + Path.Combine("opt", "dotnet", "dotnet");
             }
 
             _success = true;
         }
 
-        public static (IEnumerable<string>, bool) GetInstalledVersions()
+        public static (string[], bool) GetInstalledVersions()
         {
             if (!_success)
                 return (null, false);
 
-            return (new DirectoryInfo(_dotnet).EnumerateDirectories().Select(d => d.Name), true);
+            return (new DirectoryInfo(_sdk).EnumerateDirectories().Select(d => d.Name).ToArray(), true);
         }
 
         private static (OSPlatform?, bool) GetOSPlatform()
@@ -60,6 +64,8 @@ namespace CoreSwitch
                 return (OSPlatform.Linux, true);
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 return (OSPlatform.OSX, true);
+
+            Logger.Default.Log($"{nameof(GetOSPlatform)}: Could not determine platform");
 
             return (null, false);
         }
@@ -76,7 +82,10 @@ namespace CoreSwitch
 
                     return (config.Sdk.Version, true);
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    Logger.Default.Log($"{nameof(GetSelectedVersion)}: {e.Message}");
+                }
             }
 
             return GetSelectedVersionFallback();
@@ -86,7 +95,7 @@ namespace CoreSwitch
         {
             try
             {
-                using (var dotnet = Process.Start(new ProcessStartInfo("dotnet", "--version")
+                using (var dotnet = Process.Start(new ProcessStartInfo(_dotnet, "--version")
                 {
                     RedirectStandardOutput = true,
                     CreateNoWindow = true
@@ -97,8 +106,9 @@ namespace CoreSwitch
                     return (version, true);
                 }
             }
-            catch
+            catch (Exception e)
             {
+                Logger.Default.Log($"{nameof(GetSelectedVersionFallback)}: {e.Message}");
                 return (null, false);
             }
         }
@@ -125,19 +135,57 @@ namespace CoreSwitch
 
                 return (file, file != null);
             }
-            catch
+            catch (Exception e)
             {
+                Logger.Default.Log($"{nameof(FindGlobalJson)}: {e.Message}");
                 return (null, false);
+            }
+        }
+
+        public static (string, string, string) SetVersion(string version, bool global = false)
+        {
+            var (file, ok) = FindGlobalJson();
+            if (!ok)
+                file = new FileInfo(Path.Combine(global ? _home : Directory.GetCurrentDirectory(), GlobalJsonFilename));
+
+            try
+            {
+                using (var writer = file.CreateText())
+                {
+                    var config = GlobalJson.Create(version);
+                    var serialized = JsonConvert.SerializeObject(config, Formatting.Indented);
+                    writer.Write(serialized);
+                }
+
+                return (version, file.FullName, null);
+            }
+            catch (Exception e)
+            {
+                Logger.Default.Log($"{nameof(SetVersion)}: {e.Message}");
+                return (null, null, e.Message);
             }
         }
 
         private class GlobalJson
         {
+            [JsonProperty(PropertyName = "sdk")]
             public SdkConfig Sdk { get; set; }
 
             public class SdkConfig
             {
+                [JsonProperty(PropertyName = "version")]
                 public string Version { get; set; }
+            }
+
+            public static GlobalJson Create(string version)
+            {
+                return new GlobalJson
+                {
+                    Sdk = new SdkConfig
+                    {
+                        Version = version
+                    }
+                };
             }
         }
     }
