@@ -27,7 +27,7 @@ namespace CoreSwitch.CLI
                     return;
                 }
 
-                var (version, versionOk) = VersionManager.GetSelectedVersion();
+                var (version, isGlobal, versionOk) = VersionManager.GetSelectedVersion();
                 if (!versionOk)
                 {
                     ColorConsole.WriteLine(ErrorColor, "Error: Could not determine active sdk version.");
@@ -36,7 +36,7 @@ namespace CoreSwitch.CLI
 
                 if (args.Length == 0)
                 {
-                    PrintInstalledVersions(versions, version);
+                    PrintInstalledVersions(versions, version, isGlobal);
                 }
                 else
                 {
@@ -44,10 +44,14 @@ namespace CoreSwitch.CLI
                     var rawArgs = args.Except(optionsArgs).ToArray();
                     var options = Options.Parse(optionsArgs.Select(a => a.Substring(2).ToLower()).ToArray());
 
+                    Logger.Default.Log($"options: {string.Join(", ", optionsArgs)}");
+                    Logger.Default.Log($"args: {string.Join(", ", rawArgs)}");
+
                     if (rawArgs.Length == 0)
                     {
                         Console.WriteLine("Usage: version [options]");
                         Console.WriteLine("  --global    use global.json in user directory");
+                        Console.WriteLine("  --force     force creation of global.json");
                         Console.WriteLine();
                         Console.WriteLine("Version must be in semantic version format (x.x.x-?) or 'latest'");
                         Console.WriteLine("Omitting --global will place global.json in current directory");
@@ -67,9 +71,15 @@ namespace CoreSwitch.CLI
                         return;
                     }
 
-                    if (argVersion.Equals(version))
+                    if (!options.Force && argVersion.Equals(version))
                     {
-                        ColorConsole.WriteLine(ErrorColor, $"Error: Given version is equal to current version ({version}).");
+                        ColorConsole.WriteLine(ErrorColor, $"Error: Given version is equal to current version ({version})");
+                        return;
+                    }
+
+                    if (!versions.Contains(argVersion))
+                    {
+                        ColorConsole.WriteLine(ErrorColor, $"Error: Given version does not match any installed versions ({version})");
                         return;
                     }
 
@@ -96,24 +106,26 @@ namespace CoreSwitch.CLI
         private class Options
         {
             public bool Global { get; set; } = false;
+            public bool Force { get; set; } = false;
 
             public static Options Parse(params string[] args)
             {
                 return new Options
                 {
-                    Global = args.Contains("global")
+                    Global = args.Contains("global"),
+                    Force = args.Contains("force")
                 };
             }
         }
 
-        private static void PrintInstalledVersions(System.Collections.Generic.IEnumerable<string> versions, string version)
+        private static void PrintInstalledVersions(string[] versions, string version, bool isGlobal)
         {
             Console.WriteLine("Installed versions:");
             foreach (var v in versions)
             {
                 if (version == v)
                 {
-                    ColorConsole.WriteLine(SelectionColor, $" * {v}");
+                    ColorConsole.WriteLine(SelectionColor, $" * {v}{(isGlobal?" (global)":"")}");
                 }
                 else
                 {

@@ -70,9 +70,9 @@ namespace CoreSwitch
             return (null, false);
         }
 
-        public static (string, bool) GetSelectedVersion()
+        public static (string, bool, bool) GetSelectedVersion(bool global = false, bool force = false)
         {
-            /*var (file, ok) = FindGlobalJson();
+            var (file, isGlobal, ok) = FindGlobalJson(global, force);
             if (ok)
             {
                 try
@@ -80,18 +80,18 @@ namespace CoreSwitch
                     var content = File.ReadAllText(file.FullName);
                     var config = JsonConvert.DeserializeObject<GlobalJson>(content);
 
-                    return (config.Sdk.Version, true);
+                    return (config.Sdk.Version, isGlobal, true);
                 }
                 catch (Exception e)
                 {
                     Logger.Default.Log($"{nameof(GetSelectedVersion)}: {e.Message}");
                 }
-            }*/
+            }
 
             return GetSelectedVersionFallback();
         }
 
-        private static (string, bool) GetSelectedVersionFallback()
+        private static (string, bool, bool) GetSelectedVersionFallback()
         {
             try
             {
@@ -105,28 +105,31 @@ namespace CoreSwitch
 
                     Logger.Default.Log($"{nameof(GetSelectedVersionFallback)}: Got version '{version}' from 'dotnet --version'");
 
-                    return (version, true);
+                    return (version, true, true);
                 }
             }
             catch (Exception e)
             {
                 Logger.Default.Log($"{nameof(GetSelectedVersionFallback)}: {e.Message}");
-                return (null, false);
+                return (null, true, false);
             }
         }
 
-        private static (FileInfo, bool) FindGlobalJson()
+        private static (FileInfo file, bool isGlobal, bool ok) FindGlobalJson(bool global = false, bool force = false)
         {
             if (!_success)
-                return (null, false);
+                return (null, false, false);
 
             try
             {
-                var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-                while (!directory.GetFiles(GlobalJsonFilename).Any())
+                var directory = new DirectoryInfo(global ? _home : Directory.GetCurrentDirectory());
+                if (!directory.Exists)
+                    throw new DirectoryNotFoundException(directory.FullName);
+
+                while (!directory?.GetFiles(GlobalJsonFilename).Any() ?? false)
                 {
                     directory = directory.Parent;
-                    if (directory == null)
+                    if (directory == null && global && !force)
                     {
                         directory = new DirectoryInfo(_home);
                         break;
@@ -135,20 +138,22 @@ namespace CoreSwitch
 
                 var file = directory?.GetFiles(GlobalJsonFilename).FirstOrDefault();
 
-                return (file, file != null);
+                return (file, directory?.FullName == _home, file != null);
             }
             catch (Exception e)
             {
                 Logger.Default.Log($"{nameof(FindGlobalJson)}: {e.Message}");
-                return (null, false);
+                return (null, false, false);
             }
         }
 
-        public static (string, string, string) SetVersion(string version, bool global = false)
+        public static (string, string, string) SetVersion(string version, bool global = false, bool force = false)
         {
-            var (file, ok) = FindGlobalJson();
-            if (!ok)
+            var (file, isGlobal, ok) = FindGlobalJson(global, force);
+            if (!ok || (global && !isGlobal && force) || (!global && isGlobal && force))
                 file = new FileInfo(Path.Combine(global ? _home : Directory.GetCurrentDirectory(), GlobalJsonFilename));
+
+            Logger.Default.Log($"{nameof(SetVersion)}: ok={ok}, file={file.FullName}");
 
             try
             {
