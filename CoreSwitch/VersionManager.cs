@@ -9,29 +9,46 @@ namespace CoreSwitch
 {
     public static class VersionManager
     {
-        private static readonly Dictionary<OSPlatform, string> _home = new Dictionary<OSPlatform, string>
-        {
-            {OSPlatform.Windows, Environment.GetEnvironmentVariable("USERPROFILE")},
-            {OSPlatform.Linux, Environment.GetEnvironmentVariable("HOME")},
-            {OSPlatform.OSX, Environment.GetEnvironmentVariable("HOME")} // @todo: ensure this is correct
-        };
-
-        private static readonly Dictionary<OSPlatform, string> _dotnet = new Dictionary<OSPlatform, string>
-        {
-            {OSPlatform.Windows, Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles"), "dotnet", "sdk")},
-            {OSPlatform.Linux, Path.Combine("opt", "dotnet", "sdk")},
-            {OSPlatform.OSX, ""} // @todo: figure this out
-        };
+        private static readonly string _home;
+        private static readonly string _dotnet;
+        private static readonly bool _success;
 
         private const string GlobalJsonFilename = "global.json";
 
-        public static (IEnumerable<string>, bool) GetInstalledVersions()
+        static VersionManager()
         {
             var (platform, ok) = GetOSPlatform();
             if (!ok)
+            {
+                _success = false;
+                return;
+            }
+
+            if (platform == OSPlatform.Windows)
+            {
+                _home = Environment.GetEnvironmentVariable("USERPROFILE");
+                _dotnet = Path.Combine(Environment.GetEnvironmentVariable("ProgramFiles"), "dotnet", "sdk");
+            }
+            else if (platform == OSPlatform.Linux)
+            {
+                _home = Environment.GetEnvironmentVariable("HOME");
+                _dotnet = Path.Combine("opt", "dotnet", "sdk");
+            }
+            else if (platform == OSPlatform.OSX)
+            {
+                _home = Environment.GetEnvironmentVariable("HOME");
+                _dotnet = Path.Combine("opt", "dotnet", "sdk"); // @todo: ensure this is correct
+            }
+
+            _success = true;
+        }
+
+        public static (IEnumerable<string>, bool) GetInstalledVersions()
+        {
+            if (!_success)
                 return (null, false);
 
-            return (new DirectoryInfo(_dotnet[platform.Value]).EnumerateDirectories().Select(d => d.Name), true);
+            return (new DirectoryInfo(_dotnet).EnumerateDirectories().Select(d => d.Name), true);
         }
 
         private static (OSPlatform?, bool) GetOSPlatform()
@@ -70,8 +87,7 @@ namespace CoreSwitch
 
         private static (FileInfo, bool) FindGlobalJson()
         {
-            var (platform, ok) = GetOSPlatform();
-            if (!ok)
+            if (!_success)
                 return (null, false);
 
             var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
@@ -80,7 +96,7 @@ namespace CoreSwitch
                 directory = directory.Parent;
                 if (directory == null)
                 {
-                    directory = new DirectoryInfo(_home[platform.Value]);
+                    directory = new DirectoryInfo(_home);
                     break;
                 }
             }
