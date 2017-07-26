@@ -72,7 +72,7 @@ namespace CoreSwitch
 
         public static (string, bool) GetSelectedVersion()
         {
-            var (file, ok) = FindGlobalJson();
+            /*var (file, ok) = FindGlobalJson();
             if (ok)
             {
                 try
@@ -86,7 +86,7 @@ namespace CoreSwitch
                 {
                     Logger.Default.Log($"{nameof(GetSelectedVersion)}: {e.Message}");
                 }
-            }
+            }*/
 
             return GetSelectedVersionFallback();
         }
@@ -101,7 +101,9 @@ namespace CoreSwitch
                     CreateNoWindow = true
                 }))
                 {
-                    var version = dotnet.StandardOutput.ReadToEnd();
+                    var version = dotnet.StandardOutput.ReadToEnd().TrimStart().TrimEnd();
+
+                    Logger.Default.Log($"{nameof(GetSelectedVersionFallback)}: Got version '{version}' from 'dotnet --version'");
 
                     return (version, true);
                 }
